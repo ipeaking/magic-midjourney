@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"wrap-midjourney/initialization"
+	"wrap-midjourney/sse"
 
 	discord "github.com/bwmarrin/discordgo"
 )
@@ -56,6 +57,7 @@ func DiscordMsgCreate(s *discord.Session, m *discord.MessageCreate) {
 	// 重新生成不发送
 	// TODO 优化 使用 From
 	if strings.Contains(m.Content, "(Waiting to start)") && !strings.Contains(m.Content, "Rerolling **") {
+		notifyBusinessService(m.Message, sse.Begin)
 		trigger(m.Content, FirstTrigger)
 		return
 	}
@@ -64,6 +66,7 @@ func DiscordMsgCreate(s *discord.Session, m *discord.MessageCreate) {
 	/******** 图片生成回复 start ********/
 	for _, attachment := range m.Attachments {
 		if attachment.Width > 0 && attachment.Height > 0 {
+			notifyBusinessService(m.Message, sse.End)
 			replay(m)
 			return
 		}
@@ -80,7 +83,7 @@ func DiscordMsgUpdate(s *discord.Session, m *discord.MessageUpdate) {
 	if m.Author == nil {
 		return
 	}
-	
+
 	// 过滤掉自己发送的消息
 	if m.Author.ID == s.State.User.ID {
 		return
@@ -94,13 +97,41 @@ func DiscordMsgUpdate(s *discord.Session, m *discord.MessageUpdate) {
 
 	/******** 发送的指令midjourney生成发现错误 ********/
 	if strings.Contains(m.Content, "(Stopped)") {
+		notifyBusinessService(m.Message, sse.Error)
 		trigger(m.Content, GenerateEditError)
 		return
+	}
+
+	/******** midjourney指令正在更新 *********/
+	if m.Attachments != nil && len(m.Attachments) > 0 {
+		notifyBusinessService(m.Message, sse.Update)
 	}
 
 	if len(m.Embeds) > 0 {
 		send(m.Embeds)
 		return
+	}
+}
+
+// 通知业务服务
+func notifyBusinessService(msg *discord.Message, action sse.DiscordAction) {
+	id, _, err := sse.UnwrapMsg(msg.Content)
+	if err != nil {
+		fmt.Println("UnwrapMsg error: ", err)
+		return
+	}
+	ch, ok := sse.MsgChManager.GetMsgCh(id)
+	if !ok {
+		fmt.Println("MsgChManager.GetMsgCh error: ", err)
+		return
+	}
+	select {
+	case ch <- &sse.DiscordActMessage{
+		Message: *msg,
+		Action:  action,
+	}:
+	default:
+		fmt.Println("DiscordMessageCh is full")
 	}
 }
 

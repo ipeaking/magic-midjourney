@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"wrap-midjourney/sse"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,10 +22,15 @@ func MidjourneyBot(c *gin.Context) {
 		return
 	}
 
+	ch := make(chan *sse.DiscordActMessage, 1)
+	id := sse.MsgChManager.AddMsgCh(ch)
+	defer sse.MsgChManager.DelMsgCh(id)
+
+	wrapPrompt := sse.WrapMsg(body.Prompt, id)
 	var err error
 	switch body.Type {
 	case "generate":
-		err = GenerateImage(body.Prompt)
+		err = GenerateImage(wrapPrompt)
 	case "upscale":
 		err = ImageUpscale(body.Index, body.DiscordMsgId, body.MsgHash)
 	case "variation":
@@ -34,7 +40,7 @@ func MidjourneyBot(c *gin.Context) {
 	case "reset":
 		err = ImageReset(body.DiscordMsgId, body.MsgHash)
 	case "describe":
-		err = ImageDescribe(body.Prompt)
+		err = ImageDescribe(wrapPrompt)
 	default:
 		err = errors.New("invalid type")
 	}
@@ -43,5 +49,6 @@ func MidjourneyBot(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"message": "success"})
+
+	sse.SSE(c.Writer, c.Request, ch)
 }

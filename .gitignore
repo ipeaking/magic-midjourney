@@ -1,0 +1,17 @@
+*~
+*.idea
+.idea/
+.DS_Store
+.vscode
+._*
+*.log
+*.out
+*.exe
+bin
+vendor
+notes
+playground
+coverage.out
+profile.coverprofile
+/*.yaml
+generate/*
