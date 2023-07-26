@@ -13,6 +13,7 @@ type RequestTrigger struct {
 	MsgHash      string `json:"msgHash,omitempty"`
 	Prompt       string `json:"prompt,omitempty"`
 	Index        int64  `json:"index,omitempty"`
+	SessionID    string `json:"sessionID,omitempty"`
 }
 
 func MidjourneyBot(c *gin.Context) {
@@ -23,8 +24,20 @@ func MidjourneyBot(c *gin.Context) {
 	}
 
 	ch := make(chan *sse.DiscordActMessage, 1)
-	id := sse.MsgChManager.AddMsgCh(ch)
-	defer sse.MsgChManager.DelMsgCh(id)
+	id := ""
+	if body.SessionID != "" {
+		sse.MsgChManager.AddMsgCh1ID(body.SessionID, ch)
+		defer sse.MsgChManager.DelMsgCh(body.SessionID)
+	} else {
+		switch body.Type {
+		case "generate":
+		case "describe":
+		default:
+			c.JSON(400, gin.H{"error": "Must have sessionID"})
+		}
+		id = sse.MsgChManager.AddMsgCh(ch)
+		defer sse.MsgChManager.DelMsgCh(id)
+	}
 
 	wrapPrompt := sse.WrapMsg(body.Prompt, id)
 	var err error

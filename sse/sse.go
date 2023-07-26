@@ -40,21 +40,21 @@ var (
 )
 
 func SSE(w http.ResponseWriter, r *http.Request, ch chan *DiscordActMessage) {
-	ctx, cancel := context.WithCancel(r.Context())
+	// 设置超时时间
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
-
 	// 设置一个定时器
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	id := 0
+	serial := 0
 
 	es := eventsource.New(nil, nil)
 	defer es.Close()
 	es.ServeHTTP(w, r)
 
 	for {
-		id++
+		serial++
 		select {
 		case <-ctx.Done():
 			// 打印退出信息
@@ -62,20 +62,45 @@ func SSE(w http.ResponseWriter, r *http.Request, ch chan *DiscordActMessage) {
 			return
 		case <-ticker.C:
 			// 每秒钟发送一次消息
-			es.SendEventMessage(`{"msg":"wait"}`, "data", strconv.Itoa(id))
+			es.SendEventMessage(`{"msg":"wait"}`, "data", strconv.Itoa(serial))
 		case msg := <-ch:
 			if msg.Action == End {
-				es.SendEventMessage(fmt.Sprintf(`{"url":"%s","id":"%s","msgHash":"%s"}`,
-					msg.Message.Attachments[0].URL, msg.Message.ID,
-					getLastString(msg.Message.Attachments[0].Filename)), "data", strconv.Itoa(id))
+				chID, _, err := UnwrapMsg(msg.Message.Content)
+				if err != nil {
+					fmt.Println("UnwrapMsg error: ", err)
+					return
+				}
+				es.SendEventMessage(fmt.Sprintf(`{"url":"%s","id":"%s","msgHash":"%s","sessionID":"%s"}`,
+					msg.Message.Attachments[0].URL, msg.Message.ID, getLastString(msg.Message.Attachments[0].Filename), chID),
+					"data", strconv.Itoa(serial))
 				return
 			}
 			if msg.Action == Begin {
-				es.SendEventMessage(`{"msg":"begin"}`, "data", strconv.Itoa(id))
+				es.SendEventMessage(`{"msg":"begin"}`, "data", strconv.Itoa(serial))
 			}
 			if msg.Action == Update {
+				resp, err := http.Get(msg.Message.Attachments[0].URL)
+				if err != nil {
+					fmt.Println("HTTP请求错误:", err)
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusOK {
+					fmt.Println("HTTP请求错误，响应状态码:", resp.StatusCode)
+					return
+				}
+				// 获取body的大小
+				size := resp.ContentLength
+				uploadRes, err := qiniu_cloud(msg.Message.Attachments[0].URL, resp.Body, size)
+				if err != nil {
+					fmt.Println("上传文件错误:", err)
+					return
+				}
+				url := uploadRes.PublicAccessURL
+
 				es.SendEventMessage(fmt.Sprintf(`{"url":"%s","id":"%s"}`,
-					msg.Message.Attachments[0].URL, msg.Message.ID), "data", strconv.Itoa(id))
+					url, msg.Message.ID), "data", strconv.Itoa(serial))
 			}
 		}
 	}
@@ -95,6 +120,13 @@ type MsgChMap struct {
 func (m *MsgChMap) AddMsgCh(msgCh chan *DiscordActMessage) string {
 	// id 为当前纳秒时间戳+随机数
 	id := fmt.Sprintf("%d%d", time.Now().UnixNano(), rand.Intn(1000))
+	m.Store(id, msgCh)
+	return id
+}
+
+// 在map中增加一个msgCh，key为一个唯一id
+func (m *MsgChMap) AddMsgCh1ID(id string, msgCh chan *DiscordActMessage) string {
+	// id 为当前纳秒时间戳+随机数
 	m.Store(id, msgCh)
 	return id
 }
@@ -119,7 +151,7 @@ func WrapMsg(msg string, id string) string {
 }
 
 // 将信息进行解包，返回id以及信息
-func UnwrapMsg(msg string) (string, string, error) {
+func UnwrapMsg(msg string) (id string, body string, err error) {
 	// 通过正则表达式判断是否符合格式
 	rul := `<!id:\d+> .+$`
 	reg := regexp.MustCompile(rul)
@@ -130,6 +162,6 @@ func UnwrapMsg(msg string) (string, string, error) {
 	// 截断到第一个空格
 	split := strings.SplitN(msg, " ", 2)
 	// 去掉前面的<!id:和后面的>
-	id := strings.TrimSuffix(strings.TrimPrefix(split[0], "**<!id:"), ">")
+	id = strings.TrimSuffix(strings.TrimPrefix(split[0], "**<!id:"), ">")
 	return id, split[1], nil
 }
