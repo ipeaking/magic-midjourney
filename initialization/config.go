@@ -12,6 +12,13 @@ type Config struct {
 	DISCORD_SERVER_ID  string
 	DISCORD_CHANNEL_ID string
 	CB_URL             string
+	QiNiuConfig        *qiNiuConfig
+}
+
+type qiNiuConfig struct {
+	AccessKey string
+	SecretKey string
+	Bucket    string
 }
 
 var config *Config
@@ -29,7 +36,13 @@ func LoadConfig(cfg string) (*Config, error) {
 		DISCORD_SERVER_ID:  getViperStringValue("DISCORD_SERVER_ID"),
 		DISCORD_CHANNEL_ID: getViperStringValue("DISCORD_CHANNEL_ID"),
 		CB_URL:             getViperStringValue("CB_URL"),
+		QiNiuConfig: &qiNiuConfig{
+			AccessKey: getViperStringValue("QINIU_ACCESS_KEY"),
+			SecretKey: getViperStringValue("QINIU_SECRET_KEY"),
+			Bucket:    getViperStringValue("QINIU_BUCKET"),
+		},
 	}
+
 	return config, nil
 }
 

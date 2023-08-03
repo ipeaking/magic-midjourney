@@ -4,3 +4,8 @@ DISCORD_BOT_TOKEN: 你的机器人token
 DISCORD_SERVER_ID: 你的服务器id
 DISCORD_CHANNEL_ID: 你的频道id
 CB_URL: 获取到discord中的图片资源传输给你的业务服务接口
+
+# 七牛云配置
+QINIU_ACCESS_KEY: xxxxxxx
+QINIU_SECRET_KEY: xxxxxxx
+QINIU_BUCKET: xxxxxxx

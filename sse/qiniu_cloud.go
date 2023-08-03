@@ -2,7 +2,9 @@ package sse
 
 import (
 	"context"
+	"errors"
 	"io"
+	"wrap-midjourney/initialization"
 
 	"github.com/qiniu/go-sdk/v7/auth/qbox"
 	"github.com/qiniu/go-sdk/v7/storage"
@@ -15,9 +17,13 @@ type UploadResult struct {
 }
 
 func qiniu_cloud(key string, data io.Reader, size int64) (*UploadResult, error) {
-	bucket := "topschat-mj"
-	accessKey := "hM2NyESPz0rIRL6YbyADKMA-dzOO8oWqK9CYHmOy"
-	secretKey := "RX8sysDxa7EC4h0cKGs3Syp9AR3lmyWjFj5OTdXO"
+	conf := initialization.GetConfig()
+	if conf == nil || conf.QiNiuConfig == nil {
+		return nil, errors.New("qiniu config is nil")
+	}
+	bucket := conf.QiNiuConfig.Bucket
+	accessKey := conf.QiNiuConfig.AccessKey
+	secretKey := conf.QiNiuConfig.SecretKey
 	putPolicy := storage.PutPolicy{
 		Scope: bucket,
 	}
