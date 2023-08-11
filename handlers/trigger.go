@@ -63,5 +63,5 @@ func MidjourneyBot(c *gin.Context) {
 		return
 	}
 
-	sse.SSE(c.Writer, c.Request, ch)
+	sse.SSE(c.Writer, c.Request, ch, body.Type)
 }

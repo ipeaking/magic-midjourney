@@ -39,7 +39,7 @@ var (
 	}
 )
 
-func SSE(w http.ResponseWriter, r *http.Request, ch chan *DiscordActMessage) {
+func SSE(w http.ResponseWriter, r *http.Request, ch chan *DiscordActMessage, types string) {
 	// 设置超时时间
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
@@ -91,8 +91,8 @@ func SSE(w http.ResponseWriter, r *http.Request, ch chan *DiscordActMessage) {
 				}
 				url := uploadRes.PublicAccessURL
 
-				es.SendEventMessage(fmt.Sprintf(`{"url":"%s","id":"%s","msgHash":"%s","sessionID":"%s"}`,
-					url, msg.Message.ID, getLastString(msg.Message.Attachments[0].Filename), chID),
+				es.SendEventMessage(fmt.Sprintf(`{"url":"%s","id":"%s","msgHash":"%s","sessionID":"%s", "type":"%s"}`,
+					url, msg.Message.ID, getLastString(msg.Message.Attachments[0].Filename), chID, types),
 					"data", strconv.Itoa(serial))
 				return
 			}
@@ -120,8 +120,8 @@ func SSE(w http.ResponseWriter, r *http.Request, ch chan *DiscordActMessage) {
 				}
 				url := uploadRes.PublicAccessURL
 
-				es.SendEventMessage(fmt.Sprintf(`{"url":"%s","id":"%s"}`,
-					url, msg.Message.ID), "data", strconv.Itoa(serial))
+				es.SendEventMessage(fmt.Sprintf(`{"url":"%s","id":"%s", "type":"%s"}`,
+					url, msg.Message.ID, types), "data", strconv.Itoa(serial))
 			}
 		}
 	}
